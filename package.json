@@ -1,0 +1,27 @@
+{
+  "name": "pid",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./src/js/main.js",
+  "scripts": {
+    "build:js": "webpack --mode=development",
+    "watch:js": "onchange \"src/js\" -- webpack --mode=development"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarkasAis/rocket-pid-simulator.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MarkasAis/rocket-pid-simulator/issues"
+  },
+  "homepage": "https://github.com/MarkasAis/rocket-pid-simulator#readme",
+  "dependencies": {
+    "@babel/preset-env": "^7.24.7",
+    "babel-loader": "^9.1.3",
+    "chart.js": "^4.4.3",
+    "webpack": "^5.92.1",
+    "webpack-cli": "^5.1.4"
+  }
+}
