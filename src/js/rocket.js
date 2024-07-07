@@ -34,16 +34,17 @@ export default class Rocket {
 
         // this.body.position.x = this.wrap(this.body.position.x, -6, 6)
         // this.body.position.y = this.wrap(this.body.position.y, -5, 5)
-        this.body.position = Vec2.zero
+        // this.body.position = Vec2.zero
     }
 
     render() {
-        render.rect(this.body.position, this.size, this.body.angle);
+        let position = Vec2.zero;
+        render.rect(position, this.size, this.body.angle);
 
-        render.ray(this.body.position, this.body.velocity, 3, '#ff0000dd');
-        render.ray(this.body.position, this.body.linearAcceleration, 3, '#00ff00dd');
+        render.ray(position, this.body.velocity, 3, '#ff0000dd');
+        render.ray(position, this.body.linearAcceleration, 3, '#00ff00dd');
 
-        let worldThrust = Vec2.add(this.body.position, Vec2.rotateBy(this.centerOfThrust, this.body.angle));
+        let worldThrust = Vec2.add(position, Vec2.rotateBy(this.centerOfThrust, this.body.angle));
         let thrustDir = Vec2.fromAngle(this.thrustAngle + Math.PI);
         render.ray(worldThrust, thrustDir, 3, '#0000ffdd');
     }

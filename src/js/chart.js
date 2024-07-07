@@ -22,7 +22,7 @@ class Chart {
             style: {
                 chartColor: '#ffffff33',
                 labelColor: '#fff',
-                plotColor: '#21E5E5'
+                plotColors: [ '#21E5E5', '#F25FB7' ]
             },
 
             padding: 20,
@@ -36,7 +36,7 @@ class Chart {
             labelMargin: 5,
 
             titleFont: {
-                size: 16,
+                size: 14,
                 weight: 200,
                 family: 'Inter'
             },
@@ -81,12 +81,21 @@ class Chart {
         this.height = this.bounds.yMax - this.bounds.yMin;
     }
 
-    addData(data) {
-        this.rawData.push(data);
+    addData(...data) {
+        for (let i = 0; i < data.length; i++) {
+            if (i >= this.rawData.length) {
+                this.rawData.push([]);
+            }
+            this.rawData[i].push(data[i]);
+        }
     }
 
     updateData() {
-        this.data = this.options.processData(this, this.rawData);
+        this.data = [];
+        for (let i = 0; i < this.rawData.length; i++) {
+            this.data.push(this.options.processData(this, this.rawData[i]));
+        }
+
         if (this.options.xAxis.range == 'auto') this.updateAutoRange(true);
         if (this.options.yAxis.range == 'auto') this.updateAutoRange(false);
     }
@@ -99,13 +108,18 @@ class Chart {
         let min = Number.POSITIVE_INFINITY;
         let max = Number.NEGATIVE_INFINITY;
 
-        for (let d of this.data) {
-            let value = isX ? d.x : d.y;
-            min = Math.min(min, value);
-            max = Math.max(max, value);
+        let dataExists = false;
+
+        for (let dataset of this.data) {
+            for (let d of dataset) {
+                let value = isX ? d.x : d.y;
+                min = Math.min(min, value);
+                max = Math.max(max, value);
+                dataExists = true;
+            }
         }
 
-        if (this.data.length === 0) {
+        if (!dataExists) {
             min = 0;
             max = 0;
         }
@@ -230,18 +244,22 @@ class Chart {
             this.ctx.fillText(label, this.bounds.xMin - this.options.tickLength - this.options.labelMargin, y);
         }
 
-        this.ctx.strokeStyle = this.options.style.plotColor;
         this.ctx.lineWidth = 3;
 
-        this.ctx.beginPath();
         for (let i = 0; i < this.data.length; i++) {
-            let x = this.chartToScreenX(this.data[i].x);
-            let y = this.chartToScreenY(this.data[i].y);
+            let dataset = this.data[i];
+            this.ctx.strokeStyle = this.options.style.plotColors[i % this.options.style.plotColors.length];
 
-            if (i == 0) this.ctx.moveTo(x, y);
-            else this.ctx.lineTo(x, y);
+            this.ctx.beginPath();
+            for (let i = 0; i < dataset.length; i++) {
+                let x = this.chartToScreenX(dataset[i].x);
+                let y = this.chartToScreenY(dataset[i].y);
+
+                if (i == 0) this.ctx.moveTo(x, y);
+                else this.ctx.lineTo(x, y);
+            }
+            this.ctx.stroke();
         }
-        this.ctx.stroke();
 
         this.ctx.font = this.fontToString(this.options.titleFont);
         this.ctx.textAlign = 'center';
@@ -277,7 +295,7 @@ export const DataProcessors = {
     }
 }
 
-let options = {
+let baseOptions = {
     xAxis: {
         title: 'Time (s)',
         range: {
@@ -286,18 +304,37 @@ let options = {
         },
         ticks: [ 10, 8, 6, 4, 2, 0 ]
     },
+    processData: DataProcessors.timeProcessor
+};
+
+let angleOptions = Utils.mergeDeep({
     yAxis: {
         title: 'degrees',
+        minRange: 30
+    },
+    header: 'Angle'
+}, baseOptions);
+const angleChart = new Chart(document.getElementById('angle-chart'), angleOptions);
+
+let positionOptions = Utils.mergeDeep({
+    yAxis: {
+        title: 'meters',
         minRange: 2
     },
-    header: 'Rocket Angle',
-    processData: DataProcessors.timeProcessor
-}
-const chart = new Chart(document.getElementById('chart'), options);
-chart.render();
+    header: 'XY Position'
+}, baseOptions);
+const positionChart = new Chart(document.getElementById('position-chart'), positionOptions);
 
-export function addData(value) {
+render();
+
+export function addData(data) {
     let time = Date.now();
-    chart.addData({ time: time, y: value });
-    chart.render();
+    angleChart.addData({ time: time, y: data.angle }, { time: time, y: data.motorAngle });
+    positionChart.addData({ time: time, y: data.position.x }, {time: time, y: data.position.y});
+    render();
+}
+
+function render() {
+    angleChart.render();
+    positionChart.render();
 }
