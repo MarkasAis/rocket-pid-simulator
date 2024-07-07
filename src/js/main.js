@@ -3,10 +3,10 @@ import Rocket from "./rocket";
 import PID from "./pid";
 import Input from './input'
 import { ctx } from './render'
-import { addData } from "./chart";
+// import { addData } from "./chart_old";
+import { addData } from './chart'
 
 const gravity = new Vec2(0, -1);
-console.log(gravity);
 
 let rocket = new Rocket();
 let pid = new PID(0, 4, 0, -10);
