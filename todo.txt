@@ -1,0 +1,12 @@
+loop rotation
+pyro activations
+state
+raw telemetry
+buttons
+server
+set points
+legend
+3d preview
+3d simulator
+fast range flicker - +-20%
+start/end flicker

@@ -48,7 +48,8 @@ function update(dt) {
     addData({
         angle: rocket.body.angle * radToDeg,
         motorAngle: rocket.motorAngle * radToDeg,
-        position: rocket.body.position
+        position: rocket.body.position,
+        velocity: rocket.body.velocity
     });
 
     // pid.p = -angle;

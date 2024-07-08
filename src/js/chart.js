@@ -11,12 +11,14 @@ class Chart {
                 title: 'x',
                 labelSpace: 10,
                 range: 'auto',
+                inverted: false,
                 minRange: 0
             },
             yAxis: {
                 title: 'y',
                 labelSpace: 50,
                 range: 'auto',
+                inverted: false,
                 minRange: 0
             },
             style: {
@@ -50,6 +52,9 @@ class Chart {
             headerMargin: 10,
             header: 'Chart',
 
+            decreaseRangeCooldown: 1,
+            rangeThreshold: 0.5,
+
             processData: (_, data) => data
         }
 
@@ -57,12 +62,14 @@ class Chart {
 
         this.xAxis = {
             range: this.options.xAxis.range,
-            ticks: this.options.xAxis.ticks
+            ticks: this.options.xAxis.ticks,
+            lastDecreaseTime: 0
         };
 
         this.yAxis = {
             range: this.options.yAxis.range,
-            ticks: this.options.yAxis.ticks
+            ticks: this.options.yAxis.ticks,
+            lastDecreaseTime: 0
         };
 
         this.rawData = [];
@@ -122,6 +129,23 @@ class Chart {
         if (!dataExists) {
             min = 0;
             max = 0;
+        } else {
+            let range = max - min;
+
+            if (min < axis.range.min || max > axis.range.max) {
+                let offset = range * this.options.rangeThreshold * 0.5;
+                min -= offset;
+                max += offset;
+            } else {
+                if (axis.lastDecreaseTime) {
+                    let duration = (Date.now() - axis.lastDecreaseTime) / 1000;
+                    if (duration < axisOptions.decreaseRangeCooldown) return;
+                }
+                axis.lastDecreaseTime = Date.now();
+                
+                let containingRange = axis.range.max - axis.range.min;
+                if (range > this.options.rangeThreshold * containingRange) return;
+            }
         }
 
         let range = max - min;
@@ -133,8 +157,8 @@ class Chart {
 
         let scale = this.computeNiceScale(min, max, 5);
         axis.range = {
-            start: scale.min,
-            end: scale.max
+            min: scale.min,
+            max: scale.max
         };
 
         axis.ticks = [];
@@ -194,11 +218,15 @@ class Chart {
     }
 
     chartToScreenX(x) {
-        return Maths.map(this.xAxis.range.start, this.xAxis.range.end, this.bounds.xMin, this.bounds.xMax, x);
+        let t = Maths.inverseLerp(this.xAxis.range.min, this.xAxis.range.max, x);
+        if (this.options.xAxis.inverted) t = 1 - t;
+        return Maths.lerp(this.bounds.xMin, this.bounds.xMax, t);
     }
 
     chartToScreenY(y) {
-        return Maths.map(this.yAxis.range.start, this.yAxis.range.end, this.bounds.yMax, this.bounds.yMin, y);
+        let t = Maths.inverseLerp(this.yAxis.range.min, this.yAxis.range.max, y);
+        if (this.options.yAxis.inverted) t = 1 - t;
+        return Maths.lerp(this.bounds.yMax, this.bounds.yMin, t);
     }
 
     fontToString(font) {
@@ -217,6 +245,7 @@ class Chart {
 
         this.ctx.strokeStyle = this.options.style.chartColor;
         this.ctx.lineWidth = 1;
+        this.ctx.lineCap = 'round';
 
         for (let t of this.xAxis.ticks) {
             let x = this.chartToScreenX(t);
@@ -288,7 +317,7 @@ export const DataProcessors = {
         let processed = [];
         for (let d of data) {
             let x = (Date.now() - d.time) / 1000;
-            if (!Maths.inRange(chart.xAxis.range.start, chart.xAxis.range.end, x)) continue;
+            if (!Maths.inRange(chart.xAxis.range.min, chart.xAxis.range.max, x)) continue;
             processed.push({ x: x, y: d.y });
         }
         return processed;
@@ -297,11 +326,12 @@ export const DataProcessors = {
 
 let baseOptions = {
     xAxis: {
-        title: 'Time (s)',
+        title: 'Time (sec)',
         range: {
-            start: 10,
-            end: 0
+            min: 0,
+            max: 10
         },
+        inverted: true,
         ticks: [ 10, 8, 6, 4, 2, 0 ]
     },
     processData: DataProcessors.timeProcessor
@@ -310,31 +340,57 @@ let baseOptions = {
 let angleOptions = Utils.mergeDeep({
     yAxis: {
         title: 'degrees',
-        minRange: 30
+        minRange: 30,
+        // wrap: {
+        //     start:
+        // }
     },
     header: 'Angle'
 }, baseOptions);
 const angleChart = new Chart(document.getElementById('angle-chart'), angleOptions);
 
-let positionOptions = Utils.mergeDeep({
+let altitudeOptions = Utils.mergeDeep({
     yAxis: {
-        title: 'meters',
+        title: 'm',
         minRange: 2
     },
-    header: 'XY Position'
+    header: 'Altitude'
 }, baseOptions);
-const positionChart = new Chart(document.getElementById('position-chart'), positionOptions);
+const altitudeChart = new Chart(document.getElementById('altitude-chart'), altitudeOptions);
+
+let xPositionOptions = Utils.mergeDeep({
+    yAxis: {
+        title: 'm',
+        minRange: 2
+    },
+    header: 'X Position'
+}, baseOptions);
+const xPositionChart = new Chart(document.getElementById('x-position-chart'), xPositionOptions);
+
+let xVelocityOptions = Utils.mergeDeep({
+    yAxis: {
+        title: 'm/s',
+        minRange: 2
+    },
+    header: 'X Velocity'
+}, baseOptions);
+const xVelocityChart = new Chart(document.getElementById('x-velocity-chart'), xVelocityOptions);
+
 
 render();
 
 export function addData(data) {
     let time = Date.now();
     angleChart.addData({ time: time, y: data.angle }, { time: time, y: data.motorAngle });
-    positionChart.addData({ time: time, y: data.position.x }, {time: time, y: data.position.y});
+    altitudeChart.addData({time: time, y: data.position.y});
+    xPositionChart.addData({time: time, y: data.position.x});
+    xVelocityChart.addData({time: time, y: data.velocity.x});
     render();
 }
 
 function render() {
     angleChart.render();
-    positionChart.render();
+    altitudeChart.render();
+    xPositionChart.render();
+    xVelocityChart.render();
 }
