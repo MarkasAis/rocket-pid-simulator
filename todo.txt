@@ -8,5 +8,5 @@ set points
 legend
 3d preview
 3d simulator
-fast range flicker - +-20%
+[x] fast range flicker +-20%
 start/end flicker

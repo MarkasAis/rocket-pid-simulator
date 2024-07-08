@@ -26,6 +26,8 @@ function tick(time) {
 
 requestAnimationFrame(tick);
 
+let counter = 0;
+
 function update(dt) {
     // totalTime += dt;
    
@@ -45,6 +47,7 @@ function update(dt) {
 
     let radToDeg = 180 / Math.PI;
 
+    if (counter++ % 10 == 0)
     addData({
         angle: rocket.body.angle * radToDeg,
         motorAngle: rocket.motorAngle * radToDeg,

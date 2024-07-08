@@ -52,8 +52,9 @@ class Chart {
             headerMargin: 10,
             header: 'Chart',
 
-            decreaseRangeCooldown: 1,
-            rangeThreshold: 0.5,
+            rangeDecreaseCooldown: 5,
+            rangeDecreaseThreshold: 0.35,
+            rangeIncreaseThreshold: 1.2,
 
             processData: (_, data) => data
         }
@@ -100,11 +101,43 @@ class Chart {
     updateData() {
         this.data = [];
         for (let i = 0; i < this.rawData.length; i++) {
-            this.data.push(this.options.processData(this, this.rawData[i]));
+            let processed = this.options.processData(this, this.rawData[i]);
+            let wrapped = this.wrapData(processed);
+            this.data.push(wrapped);
         }
 
         if (this.options.xAxis.range == 'auto') this.updateAutoRange(true);
         if (this.options.yAxis.range == 'auto') this.updateAutoRange(false);
+    }
+
+    wrapData(data) {
+        if (this.options.xAxis.wrap) {
+            let wrapRange = this.options.xAxis.wrap.max - this.options.xAxis.wrap.min;
+
+            for (let d of data) {
+                d.wrapX = Math.floor(Maths.inverseLerp(this.options.xAxis.wrap.min, this.options.xAxis.wrap.max, d.x));
+                d.x -= wrapRange * d.wrapX;
+            }
+        } else {
+            for (let d of data) {
+                d.wrapX = 0;
+            }
+        }
+
+        if (this.options.yAxis.wrap) {
+            let wrapRange = this.options.yAxis.wrap.max - this.options.yAxis.wrap.min;
+
+            for (let d of data) {
+                d.wrapY = Math.floor(Maths.inverseLerp(this.options.yAxis.wrap.min, this.options.yAxis.wrap.max, d.y));
+                d.y -= wrapRange * d.wrapY;
+            }
+        } else {
+            for (let d of data) {
+                d.wrapY = 0;
+            }
+        }
+
+        return data;
     }
 
     updateAutoRange(isX) {
@@ -133,18 +166,18 @@ class Chart {
             let range = max - min;
 
             if (min < axis.range.min || max > axis.range.max) {
-                let offset = range * this.options.rangeThreshold * 0.5;
+                let offset = range * this.options.rangeIncreaseThreshold * 0.5;
                 min -= offset;
                 max += offset;
             } else {
                 if (axis.lastDecreaseTime) {
                     let duration = (Date.now() - axis.lastDecreaseTime) / 1000;
-                    if (duration < axisOptions.decreaseRangeCooldown) return;
+                    if (duration < this.options.rangeDecreaseCooldown) return;
                 }
                 axis.lastDecreaseTime = Date.now();
-                
+
                 let containingRange = axis.range.max - axis.range.min;
-                if (range > this.options.rangeThreshold * containingRange) return;
+                if (range > this.options.rangeDecreaseThreshold * containingRange) return;
             }
         }
 
@@ -246,6 +279,7 @@ class Chart {
         this.ctx.strokeStyle = this.options.style.chartColor;
         this.ctx.lineWidth = 1;
         this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
 
         for (let t of this.xAxis.ticks) {
             let x = this.chartToScreenX(t);
@@ -281,11 +315,14 @@ class Chart {
 
             this.ctx.beginPath();
             for (let i = 0; i < dataset.length; i++) {
+                if (i > 0 && (dataset[i-1].wrapX != dataset[i].wrapX || dataset[i-1].wrapY != dataset[i].wrapY)) {
+                    this.renderWrap(dataset[i-1], dataset[i]);
+                }
+
                 let x = this.chartToScreenX(dataset[i].x);
                 let y = this.chartToScreenY(dataset[i].y);
-
-                if (i == 0) this.ctx.moveTo(x, y);
-                else this.ctx.lineTo(x, y);
+                if (i > 0) this.ctx.lineTo(x, y);
+                else this.ctx.moveTo(x, y);
             }
             this.ctx.stroke();
         }
@@ -309,6 +346,54 @@ class Chart {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'bottom';
         this.ctx.fillText(this.options.header, centerX, this.bounds.yMin - this.options.headerMargin);
+    }
+
+    renderWrap(start, end) {
+        let dwX = end.wrapX - start.wrapX;
+        let dwY = end.wrapY - start.wrapY;
+
+        let rangeX = this.options.xAxis.wrap ? this.options.xAxis.wrap.max - this.options.xAxis.wrap.min : 0;
+        let rangeY = this.options.yAxis.wrap ? this.options.yAxis.wrap.max - this.options.yAxis.wrap.min : 0;
+
+        let toX = end.x + dwX * rangeX;
+        let toY = end.y + dwY * rangeY;
+        
+        let fromX = start.x - dwX * rangeX;
+        let fromY = start.y - dwY * rangeY;
+
+        let wrapBounds = {
+            xMin: this.xAxis.range.min,
+            xMax: this.xAxis.range.max,
+            yMin: this.yAxis.range.min,
+            yMax: this.yAxis.range.max,
+        }
+
+        if (this.options.xAxis.wrap) {
+            wrapBounds.xMin = this.options.xAxis.wrap.min;
+            wrapBounds.xMax = this.options.xAxis.wrap.max;
+        }
+
+        if (this.options.yAxis.wrap) {
+            wrapBounds.yMin = this.options.yAxis.wrap.min;
+            wrapBounds.yMax = this.options.yAxis.wrap.max;
+        }
+
+        let intersectTo = Maths.lineBoxIntersect(start.x, start.y, toX, toY, wrapBounds.xMin, wrapBounds.xMax, wrapBounds.yMin, wrapBounds.yMax).closest;
+        if (intersectTo != null) {
+            toX = intersectTo.x;
+            toY = intersectTo.y;
+        }
+
+        let intersectFrom = Maths.lineBoxIntersect(fromX, fromY, end.x, end.y, wrapBounds.xMin, wrapBounds.xMax, wrapBounds.yMin, wrapBounds.yMax).closest;
+        if (intersectFrom != null) {
+            fromX = intersectFrom.x;
+            fromY = intersectFrom.y;
+        }
+
+
+        this.ctx.lineTo(this.chartToScreenX(toX), this.chartToScreenY(toY));
+        this.ctx.moveTo(this.chartToScreenX(fromX), this.chartToScreenY(fromY));
+        this.ctx.lineTo(this.chartToScreenX(end.x), this.chartToScreenY(end.y));
     }
 }
 
@@ -340,10 +425,15 @@ let baseOptions = {
 let angleOptions = Utils.mergeDeep({
     yAxis: {
         title: 'degrees',
-        minRange: 30,
-        // wrap: {
-        //     start:
-        // }
+        range: {
+            min: -180,
+            max: 180
+        },
+        wrap: {
+            min: -180,
+            max: 180
+        },
+        ticks: [ -180, -90, 0, 90, 180 ]
     },
     header: 'Angle'
 }, baseOptions);
