@@ -1,4 +1,4 @@
-loop rotation
+[x] loop rotation
 pyro activations
 state
 raw telemetry
@@ -9,4 +9,5 @@ legend
 3d preview
 3d simulator
 [x] fast range flicker +-20%
-start/end flicker
+[x] start/end flicker
+pid mod

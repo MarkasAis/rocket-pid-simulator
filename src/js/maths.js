@@ -1,3 +1,5 @@
+import Vec2 from "./vec2";
+
 export default class Maths {
     static lerp(a, b, t) {
         return (b-a) * t + a;
@@ -17,54 +19,65 @@ export default class Maths {
         return b <= value && value <= a;
     }
 
-    static lineBoxIntersect(x1, y1, x2, y2, minX, maxX, minY, maxY) {
+    static lineBoxIntersect(start, end, bounds) {
         let intersections = [];
     
         // Helper function to add intersection if within segment and box bounds
-        function addIntersection(tx, ty, t) {
-            if (0 <= t && t <= 1 && minX <= tx && tx <= maxX && minY <= ty && ty <= maxY) {
-                intersections.push({ x: tx, y: ty });
+        function addIntersection(pos, t) {
+            if (0 <= t && t <= 1 && Maths.pointBoxIntersect(pos, bounds)) {
+                intersections.push(pos);
             }
         }
     
         // Check intersection with left edge (x = minX)
-        if (x1 !== x2) {  // Avoid division by zero
-            let t = (minX - x1) / (x2 - x1);
-            let y = y1 + t * (y2 - y1);
-            addIntersection(minX, y, t);
+        if (start.x !== end.x) {
+            let t = (bounds.min.x - start.x) / (end.x - start.x);
+            let y = start.y + t * (end.y - start.y);
+            addIntersection(new Vec2(bounds.min.x, y), t);
         }
     
         // Check intersection with right edge (x = maxX)
-        if (x1 !== x2) {  // Avoid division by zero
-            let t = (maxX - x1) / (x2 - x1);
-            let y = y1 + t * (y2 - y1);
-            addIntersection(maxX, y, t);
+        if (start.x !== end.x) {
+            let t = (bounds.max.x - start.x) / (end.x - start.x);
+            let y = start.y + t * (end.y - start.y);
+            addIntersection(new Vec2(bounds.max.x, y), t);
         }
     
         // Check intersection with bottom edge (y = minY)
-        if (y1 !== y2) {  // Avoid division by zero
-            let t = (minY - y1) / (y2 - y1);
-            let x = x1 + t * (x2 - x1);
-            addIntersection(x, minY, t);
+        if (start.y !== end.y) {
+            let t = (bounds.min.y - start.y) / (end.y - start.y);
+            let x = start.x + t * (end.x - start.x);
+            addIntersection(new Vec2(x, bounds.min.y), t);
         }
     
         // Check intersection with top edge (y = maxY)
-        if (y1 !== y2) {  // Avoid division by zero
-            let t = (maxY - y1) / (y2 - y1);
-            let x = x1 + t * (x2 - x1);
-            addIntersection(x, maxY, t);
+        if (start.y !== end.y) {
+            let t = (bounds.max.y - start.y) / (end.y - start.y);
+            let x = start.x + t * (end.x - start.x);
+            addIntersection(new Vec2(x, bounds.max.y), t);
         }
     
         // Find the closest intersection
-        let closestIntersection = intersections.length === 0 ? null : intersections.reduce((closest, current) => {
-            let closestDist = Math.hypot(closest.x - x1, closest.y - y1);
-            let currentDist = Math.hypot(current.x - x1, current.y - y1);
-            return currentDist < closestDist ? current : closest;
-        });
+        let closestIntersection = null;
+        let closestDist = Number.POSITIVE_INFINITY;
+        
+        if (intersections.length !== 0) {
+            for (let i of intersections) {
+                let dist = Math.hypot(i.x - start.x, i.y - start.y);
+                if (dist <  closestDist) {
+                    closestIntersection = i;
+                    closestDist = dist;
+                }
+            }
+        }
     
         return {
             intersections: intersections,
             closest: closestIntersection
         };
+    }
+
+    static pointBoxIntersect(pos, bounds) {
+        return pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y;
     }
 }

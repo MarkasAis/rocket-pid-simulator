@@ -1,5 +1,7 @@
 import Maths from "./maths";
 import Utils from "./utils";
+import Vec2 from "./vec2";
+import Bounds from "./bounds";
 
 class Chart {
     constructor(canvas, options = {}) {
@@ -7,20 +9,23 @@ class Chart {
         this.ctx = this.canvas.getContext('2d');
 
         this.options = {
-            xAxis: {
-                title: 'x',
-                labelSpace: 10,
-                range: 'auto',
-                inverted: false,
-                minRange: 0
+            axis: {
+                x: {
+                    title: 'x',
+                    labelSpace: 10,
+                    range: 'auto',
+                    inverted: false,
+                    minRange: 0
+                },
+                y: {
+                    title: 'y',
+                    labelSpace: 50,
+                    range: 'auto',
+                    inverted: false,
+                    minRange: 0
+                },
             },
-            yAxis: {
-                title: 'y',
-                labelSpace: 50,
-                range: 'auto',
-                inverted: false,
-                minRange: 0
-            },
+            
             style: {
                 chartColor: '#ffffff33',
                 labelColor: '#fff',
@@ -61,32 +66,52 @@ class Chart {
 
         this.options = Utils.mergeDeep(this.options, options);
 
-        this.xAxis = {
-            range: this.options.xAxis.range,
-            ticks: this.options.xAxis.ticks,
-            lastDecreaseTime: 0
+
+        this.axis = {
+            x: {
+                range: this.options.axis.x.range,
+                ticks: this.options.axis.x.ticks,
+                lastDecreaseTime: 0
+            },
+            y: {
+                range: this.options.axis.y.range,
+                ticks: this.options.axis.y.ticks,
+                lastDecreaseTime: 0
+            }
         };
 
-        this.yAxis = {
-            range: this.options.yAxis.range,
-            ticks: this.options.yAxis.ticks,
-            lastDecreaseTime: 0
-        };
+
 
         this.rawData = [];
         this.computeParams();
     }
 
     computeParams() {
-        this.bounds = {
-            xMin: this.options.padding + this.options.titleFont.size + this.options.titleMargin + this.options.yAxis.labelSpace + this.options.labelMargin + this.options.tickLength,
-            xMax: this.canvas.width - this.options.padding,
-            yMin: this.options.padding + this.options.headerFont.size + this.options.headerMargin,
-            yMax: this.canvas.height - this.options.padding - this.options.titleFont.size - this.options.titleMargin - this.options.xAxis.labelSpace - this.options.labelMargin - this.options.tickLength
-        };
+        this.bounds = new Bounds(
+            this.options.padding + this.options.titleFont.size + this.options.titleMargin + this.options.axis.y.labelSpace + this.options.labelMargin + this.options.tickLength,
+            this.options.padding + this.options.headerFont.size + this.options.headerMargin,
+            this.canvas.width - this.options.padding,
+            this.canvas.height - this.options.padding - this.options.titleFont.size - this.options.titleMargin - this.options.axis.x.labelSpace - this.options.labelMargin - this.options.tickLength
+        );
+    }
 
-        this.width = this.bounds.xMax - this.bounds.xMin;
-        this.height = this.bounds.yMax - this.bounds.yMin;
+    updateRenderParams() {
+        this.wrapBounds = new Bounds(
+            this.axis.x.range.min,
+            this.axis.y.range.min,
+            this.axis.x.range.max,
+            this.axis.y.range.max
+        );
+
+        if (this.options.axis.x.wrap) {
+            this.wrapBounds.min.x = this.options.axis.x.wrap.min;
+            this.wrapBounds.max.x = this.options.axis.x.wrap.max;
+        }
+
+        if (this.options.axis.y.wrap) {
+            this.wrapBounds.min.y = this.options.axis.y.wrap.min;
+            this.wrapBounds.max.y = this.options.axis.y.wrap.max;
+        }
     }
 
     addData(...data) {
@@ -102,38 +127,43 @@ class Chart {
         this.data = [];
         for (let i = 0; i < this.rawData.length; i++) {
             let processed = this.options.processData(this, this.rawData[i]);
-            let wrapped = this.wrapData(processed);
+            let converted = this.convertData(processed);
+            let wrapped = this.wrapData(converted);
             this.data.push(wrapped);
         }
 
-        if (this.options.xAxis.range == 'auto') this.updateAutoRange(true);
-        if (this.options.yAxis.range == 'auto') this.updateAutoRange(false);
+        if (this.options.axis.x.range == 'auto') this.updateAutoRange(true);
+        if (this.options.axis.y.range == 'auto') this.updateAutoRange(false);
+    }
+
+    convertData(data) {
+        let converted = [];
+        for (let d of data) {
+            converted.push({ pos: new Vec2(d.x, d.y )});
+        }
+        return converted;
     }
 
     wrapData(data) {
-        if (this.options.xAxis.wrap) {
-            let wrapRange = this.options.xAxis.wrap.max - this.options.xAxis.wrap.min;
+        for (let d of data) {
+            d.wrap = Vec2.zero;
+        }
+
+        if (this.options.axis.x.wrap) {
+            let wrapRange = this.options.axis.x.wrap.max - this.options.axis.x.wrap.min;
 
             for (let d of data) {
-                d.wrapX = Math.floor(Maths.inverseLerp(this.options.xAxis.wrap.min, this.options.xAxis.wrap.max, d.x));
-                d.x -= wrapRange * d.wrapX;
-            }
-        } else {
-            for (let d of data) {
-                d.wrapX = 0;
+                d.wrap.x = Math.floor(Maths.inverseLerp(this.options.axis.x.wrap.min, this.options.axis.x.wrap.max, d.pos.x));
+                d.pos.x -= wrapRange * d.wrap.x;
             }
         }
 
-        if (this.options.yAxis.wrap) {
-            let wrapRange = this.options.yAxis.wrap.max - this.options.yAxis.wrap.min;
+        if (this.options.axis.y.wrap) {
+            let wrapRange = this.options.axis.y.wrap.max - this.options.axis.y.wrap.min;
 
             for (let d of data) {
-                d.wrapY = Math.floor(Maths.inverseLerp(this.options.yAxis.wrap.min, this.options.yAxis.wrap.max, d.y));
-                d.y -= wrapRange * d.wrapY;
-            }
-        } else {
-            for (let d of data) {
-                d.wrapY = 0;
+                d.wrap.y = Math.floor(Maths.inverseLerp(this.options.axis.y.wrap.min, this.options.axis.y.wrap.max, d.pos.y));
+                d.pos.y -= wrapRange * d.wrap.y;
             }
         }
 
@@ -141,9 +171,9 @@ class Chart {
     }
 
     updateAutoRange(isX) {
-        let axisName = isX ? 'xAxis' : 'yAxis';
-        let axisOptions = this.options[axisName];
-        let axis = this[axisName];
+        let axisName = isX ? 'x' : 'y';
+        let axisOptions = this.options.axis[axisName];
+        let axis = this.axis[axisName];
 
         let min = Number.POSITIVE_INFINITY;
         let max = Number.NEGATIVE_INFINITY;
@@ -152,7 +182,7 @@ class Chart {
 
         for (let dataset of this.data) {
             for (let d of dataset) {
-                let value = isX ? d.x : d.y;
+                let value = isX ? d.pos.x : d.pos.y;
                 min = Math.min(min, value);
                 max = Math.max(max, value);
                 dataExists = true;
@@ -251,15 +281,22 @@ class Chart {
     }
 
     chartToScreenX(x) {
-        let t = Maths.inverseLerp(this.xAxis.range.min, this.xAxis.range.max, x);
-        if (this.options.xAxis.inverted) t = 1 - t;
-        return Maths.lerp(this.bounds.xMin, this.bounds.xMax, t);
+        let t = Maths.inverseLerp(this.axis.x.range.min, this.axis.x.range.max, x);
+        if (this.options.axis.x.inverted) t = 1 - t;
+        return Maths.lerp(this.bounds.min.x, this.bounds.max.x, t);
     }
 
     chartToScreenY(y) {
-        let t = Maths.inverseLerp(this.yAxis.range.min, this.yAxis.range.max, y);
-        if (this.options.yAxis.inverted) t = 1 - t;
-        return Maths.lerp(this.bounds.yMax, this.bounds.yMin, t);
+        let t = Maths.inverseLerp(this.axis.y.range.min, this.axis.y.range.max, y);
+        if (this.options.axis.y.inverted) t = 1 - t;
+        return Maths.lerp(this.bounds.max.y, this.bounds.min.y, t);
+    }
+
+    chartToScreenPos(pos) {
+        return new Vec2(
+            this.chartToScreenX(pos.x),
+            this.chartToScreenY(pos.y)
+        );
     }
 
     fontToString(font) {
@@ -268,6 +305,7 @@ class Chart {
 
     render() {
         this.updateData();
+        this.updateRenderParams();
 
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -281,30 +319,30 @@ class Chart {
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
 
-        for (let t of this.xAxis.ticks) {
+        for (let t of this.axis.x.ticks) {
             let x = this.chartToScreenX(t);
             this.ctx.beginPath();
-            this.ctx.moveTo(x, this.bounds.yMin);
-            this.ctx.lineTo(x, this.bounds.yMax + this.options.tickLength);
+            this.ctx.moveTo(x, this.bounds.min.y);
+            this.ctx.lineTo(x, this.bounds.max.y + this.options.tickLength);
             this.ctx.stroke();
-            this.ctx.fillText(t, x, this.bounds.yMax + this.options.tickLength + this.options.labelMargin);
+            this.ctx.fillText(t, x, this.bounds.max.y + this.options.tickLength + this.options.labelMargin);
         }
         
         this.ctx.textAlign = 'right';
         this.ctx.textBaseline = 'middle';
 
-        for (let t of this.yAxis.ticks) {
+        for (let t of this.axis.y.ticks) {
             let y = this.chartToScreenY(t);
             this.ctx.fillStyle = this.options.style.chartColor;
             this.ctx.beginPath();
-            this.ctx.moveTo(this.bounds.xMin - this.options.tickLength, y);
-            this.ctx.lineTo(this.bounds.xMax, y);
+            this.ctx.moveTo(this.bounds.min.x - this.options.tickLength, y);
+            this.ctx.lineTo(this.bounds.max.x, y);
             this.ctx.stroke();
 
             if (Math.abs(t) < 1e-10) t = 0;
             let label = t.toFixed(1);
             this.ctx.fillStyle = this.options.style.labelColor;
-            this.ctx.fillText(label, this.bounds.xMin - this.options.tickLength - this.options.labelMargin, y);
+            this.ctx.fillText(label, this.bounds.min.x - this.options.tickLength - this.options.labelMargin, y);
         }
 
         this.ctx.lineWidth = 3;
@@ -315,14 +353,16 @@ class Chart {
 
             this.ctx.beginPath();
             for (let i = 0; i < dataset.length; i++) {
-                if (i > 0 && (dataset[i-1].wrapX != dataset[i].wrapX || dataset[i-1].wrapY != dataset[i].wrapY)) {
-                    this.renderWrap(dataset[i-1], dataset[i]);
+                if (i > 0) {
+                    if (dataset[i-1].wrap.x != dataset[i].wrap.x || dataset[i-1].wrap.y != dataset[i].wrap.y) {
+                        this.renderWrap(dataset[i-1], dataset[i]);
+                    } else {
+                        this.renderLine(dataset[i-1].pos, dataset[i].pos);
+                    }
+                } else {
+                    let pos = this.chartToScreenPos(dataset[i].pos);
+                    this.ctx.moveTo(pos.x, pos.y);
                 }
-
-                let x = this.chartToScreenX(dataset[i].x);
-                let y = this.chartToScreenY(dataset[i].y);
-                if (i > 0) this.ctx.lineTo(x, y);
-                else this.ctx.moveTo(x, y);
             }
             this.ctx.stroke();
         }
@@ -331,136 +371,177 @@ class Chart {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'top';
 
-        let centerX = (this.bounds.xMin + this.bounds.xMax) * 0.5;
-        let centerY = (this.bounds.yMin + this.bounds.yMax) * 0.5;
+        let center = this.bounds.center;
 
-        this.ctx.fillText(this.options.xAxis.title, centerX, this.bounds.yMax + this.options.tickLength + this.options.labelMargin + this.options.xAxis.labelSpace + this.options.titleMargin);
+        this.ctx.fillText(this.options.axis.x.title, center.x, this.bounds.max.y + this.options.tickLength + this.options.labelMargin + this.options.axis.x.labelSpace + this.options.titleMargin);
 
         this.ctx.save();
         this.ctx.rotate(-Math.PI / 2);
-        this.ctx.translate(-centerY, this.bounds.xMin - this.options.tickLength - this.options.labelMargin - this.options.yAxis.labelSpace - this.options.titleMargin);
-        this.ctx.fillText(this.options.yAxis.title, 0, 0);
+        this.ctx.translate(-center.y, this.bounds.min.x - this.options.tickLength - this.options.labelMargin - this.options.axis.y.labelSpace - this.options.titleMargin);
+        this.ctx.fillText(this.options.axis.y.title, 0, 0);
         this.ctx.restore();
 
         this.ctx.font = this.fontToString(this.options.headerFont);
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'bottom';
-        this.ctx.fillText(this.options.header, centerX, this.bounds.yMin - this.options.headerMargin);
+        this.ctx.fillText(this.options.header, center.x, this.bounds.min.y - this.options.headerMargin);
+    }
+
+    lineTo(pos) {
+        let screenPos = this.chartToScreenPos(pos);
+        this.ctx.lineTo(screenPos.x, screenPos.y);
+    }
+
+    moveTo(pos) {
+        let screenPos = this.chartToScreenPos(pos);
+        this.ctx.moveTo(screenPos.x, screenPos.y);
+    }
+
+    renderLine(start, end) {
+        let startInside = Maths.pointBoxIntersect(start, this.wrapBounds);
+        let endInside = Maths.pointBoxIntersect(end, this.wrapBounds);
+        if (!startInside && !endInside) this.moveTo(end);
+        else if (startInside && endInside) this.lineTo(end);
+        else if (startInside && !endInside) {
+            let intersect = Maths.lineBoxIntersect(start, end, this.wrapBounds).closest;
+            if (intersect != null) {
+                this.lineTo(intersect);
+                this.moveTo(end);
+            } else {
+                this.lineTo(end);
+            }
+        } else if (!startInside && endInside) {
+            let intersect = Maths.lineBoxIntersect(start, end, this.wrapBounds).closest;
+            if (intersect != null) {
+                this.moveTo(intersect);
+                this.lineTo(end);
+            } else {
+                this.moveTo(end);
+            }
+        }
     }
 
     renderWrap(start, end) {
-        let dwX = end.wrapX - start.wrapX;
-        let dwY = end.wrapY - start.wrapY;
+        let dw = Vec2.sub(end.wrap, start.wrap);
 
-        let rangeX = this.options.xAxis.wrap ? this.options.xAxis.wrap.max - this.options.xAxis.wrap.min : 0;
-        let rangeY = this.options.yAxis.wrap ? this.options.yAxis.wrap.max - this.options.yAxis.wrap.min : 0;
-
-        let toX = end.x + dwX * rangeX;
-        let toY = end.y + dwY * rangeY;
+        let range = new Vec2(
+            this.options.axis.x.wrap ? this.options.axis.x.wrap.max - this.options.axis.x.wrap.min : 0,
+            this.options.axis.y.wrap ? this.options.axis.y.wrap.max - this.options.axis.y.wrap.min : 0
+        );
         
-        let fromX = start.x - dwX * rangeX;
-        let fromY = start.y - dwY * rangeY;
+        let offset = Vec2.mult(dw, range);
+        let to = Vec2.add(end.pos, offset);
+        let from = Vec2.sub(start.pos, offset);
 
-        let wrapBounds = {
-            xMin: this.xAxis.range.min,
-            xMax: this.xAxis.range.max,
-            yMin: this.yAxis.range.min,
-            yMax: this.yAxis.range.max,
-        }
-
-        if (this.options.xAxis.wrap) {
-            wrapBounds.xMin = this.options.xAxis.wrap.min;
-            wrapBounds.xMax = this.options.xAxis.wrap.max;
-        }
-
-        if (this.options.yAxis.wrap) {
-            wrapBounds.yMin = this.options.yAxis.wrap.min;
-            wrapBounds.yMax = this.options.yAxis.wrap.max;
-        }
-
-        let intersectTo = Maths.lineBoxIntersect(start.x, start.y, toX, toY, wrapBounds.xMin, wrapBounds.xMax, wrapBounds.yMin, wrapBounds.yMax).closest;
-        if (intersectTo != null) {
-            toX = intersectTo.x;
-            toY = intersectTo.y;
-        }
-
-        let intersectFrom = Maths.lineBoxIntersect(fromX, fromY, end.x, end.y, wrapBounds.xMin, wrapBounds.xMax, wrapBounds.yMin, wrapBounds.yMax).closest;
-        if (intersectFrom != null) {
-            fromX = intersectFrom.x;
-            fromY = intersectFrom.y;
-        }
-
-
-        this.ctx.lineTo(this.chartToScreenX(toX), this.chartToScreenY(toY));
-        this.ctx.moveTo(this.chartToScreenX(fromX), this.chartToScreenY(fromY));
-        this.ctx.lineTo(this.chartToScreenX(end.x), this.chartToScreenY(end.y));
+        this.renderLine(start.pos, to);
+        this.renderLine(from, end.pos);
     }
 }
 
 export const DataProcessors = {
     timeProcessor: (chart, data) => {
+        let enteredRange = false;
+        let startIndex = -1;
+        let endIndex = -1;
         let processed = [];
-        for (let d of data) {
-            let x = (Date.now() - d.time) / 1000;
-            if (!Maths.inRange(chart.xAxis.range.min, chart.xAxis.range.max, x)) continue;
-            processed.push({ x: x, y: d.y });
+
+        function getTime(time) {
+            return (Date.now() - time) / 1000;
         }
+
+        function wrapData(index, time = null) {
+            let d = data[index];
+            if (time == null) time = getTime(d.time);
+            return { x: time, y: d.y };
+        }
+
+        for (let i = 0; i < data.length; i++) {
+            let x = getTime(data[i].time);
+            let inRange = Maths.inRange(chart.axis.x.range.min, chart.axis.x.range.max, x);
+            
+            if (!enteredRange && inRange) {
+                enteredRange = true;
+                startIndex = i-1;
+            }
+
+            if (enteredRange && !inRange) {
+                endIndex = i;
+                break;
+            }
+
+            if (inRange) {
+                processed.push(wrapData(i, x));
+            }
+        }
+
+        if (startIndex !== -1) processed.unshift(wrapData(startIndex));
+        if (endIndex !== -1) processed.push(wrapData(endIndex));
         return processed;
     }
 }
 
 let baseOptions = {
-    xAxis: {
-        title: 'Time (sec)',
-        range: {
-            min: 0,
-            max: 10
-        },
-        inverted: true,
-        ticks: [ 10, 8, 6, 4, 2, 0 ]
+    axis: {
+        x: {
+            title: 'Time (sec)',
+            range: {
+                min: 0,
+                max: 10
+            },
+            inverted: true,
+            ticks: [ 10, 8, 6, 4, 2, 0 ]
+        }
     },
     processData: DataProcessors.timeProcessor
 };
 
 let angleOptions = Utils.mergeDeep({
-    yAxis: {
-        title: 'degrees',
-        range: {
-            min: -180,
-            max: 180
-        },
-        wrap: {
-            min: -180,
-            max: 180
-        },
-        ticks: [ -180, -90, 0, 90, 180 ]
+    axis: {
+        y: {
+            title: 'degrees',
+            range: {
+                min: -180,
+                max: 180
+            },
+            wrap: {
+                min: -180,
+                max: 180
+            },
+            ticks: [ -180, -90, 0, 90, 180 ]
+        }
     },
     header: 'Angle'
 }, baseOptions);
 const angleChart = new Chart(document.getElementById('angle-chart'), angleOptions);
 
 let altitudeOptions = Utils.mergeDeep({
-    yAxis: {
-        title: 'm',
-        minRange: 2
+    axis: { 
+        y: {
+            title: 'm',
+            minRange: 2
+        }
     },
     header: 'Altitude'
 }, baseOptions);
 const altitudeChart = new Chart(document.getElementById('altitude-chart'), altitudeOptions);
 
 let xPositionOptions = Utils.mergeDeep({
-    yAxis: {
-        title: 'm',
-        minRange: 2
+    axis: {
+        y: {
+            title: 'm',
+            minRange: 2
+        }
     },
     header: 'X Position'
 }, baseOptions);
 const xPositionChart = new Chart(document.getElementById('x-position-chart'), xPositionOptions);
 
 let xVelocityOptions = Utils.mergeDeep({
-    yAxis: {
-        title: 'm/s',
-        minRange: 2
+    axis: {
+        y: {
+            title: 'm/s',
+            minRange: 2
+        }
     },
     header: 'X Velocity'
 }, baseOptions);

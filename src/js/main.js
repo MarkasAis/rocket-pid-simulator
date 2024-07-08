@@ -47,7 +47,7 @@ function update(dt) {
 
     let radToDeg = 180 / Math.PI;
 
-    if (counter++ % 10 == 0)
+    // if (counter++ % 100 == 0)
     addData({
         angle: rocket.body.angle * radToDeg,
         motorAngle: rocket.motorAngle * radToDeg,
